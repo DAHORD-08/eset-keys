@@ -4,10 +4,9 @@ import asyncio
 from fastapi import FastAPI, HTTPException
 from playwright.async_api import async_playwright
 
-from mail_account import creer_mail, attendre_verification
-from eset_account import creer_compte_eset
-
 app = FastAPI()
+
+MOT_DE_PASSE = "singe@JUNGLE369"
 
 @app.get("/")
 def home():
@@ -17,42 +16,140 @@ def home():
 async def generate_key():
     try:
         async with async_playwright() as playwright:
-            # 1. Connexion unique à Browserless
             token = os.environ.get("BROWSERLESS_TOKEN", "2UlhDbObUX6gvHZc97b815c9c73ee1cb06b7260c79d8557b7")
             endpoint_url = f"wss://production-sfo.browserless.io/chromium?token={token}"
             
-            print("[Workflow] Connexion unique au navigateur distant...")
+            print("[Workflow] Connexion à l'instance Browserless (Mono-onglet)...")
             browser = await playwright.chromium.connect(endpoint_url)
             context = await browser.new_context()
+            page = await context.new_page()
 
-            # 2. Étape Mail : On ouvre un onglet pour le mailer
-            page_mail = await context.new_page()
-            email = await creer_mail(page_mail)
-            print(f"[Workflow] E-mail généré : {email}")
+            # --- ÉTAPE 1 : RÉCUPÉRATION DU MAIL ---
+            print("[Workflow] 1/4 - Récupération de l'e-mail temporaire...")
+            await page.goto("https://dahord-08.github.io/DAHORD-Mailer/")
+            await page.wait_for_load_state("networkidle")
             
-            # 3. Étape ESET : On ouvre un deuxième onglet dans le même navigateur
-            page_eset = await context.new_page()
-            print("[Workflow] Inscription sur ESET en cours...")
-            cle_licence = await creer_compte_eset(page_eset, email)
+            champ_affichage_mail = page.locator('input#email-display')
+            await champ_affichage_mail.wait_for(state="visible", timeout=15000)
+            email = await champ_affichage_mail.input_value()
+            nom = email.split("@")[0]
+            print(f"[Workflow] E-mail récupéré : {email}")
+
+            # --- ÉTAPE 2 : INSCRIPTION ESET ---
+            print("[Workflow] 2/4 - Navigation vers ESET...")
+            await page.goto("https://login.eset.com/register")
+            await page.wait_for_load_state("networkidle")
+
+            print("[Workflow] Acceptation des cookies...")
+            bouton_cookies = page.locator('button#cc-accept')
+            await bouton_cookies.wait_for(state="visible", timeout=10000)
+            await bouton_cookies.click()
+
+            print("[Workflow] Remplissage du formulaire d'inscription...")
+            await page.locator('input#email').fill(email)
+            await page.locator('input#password').fill(MOT_DE_PASSE)
+
+            print("[Workflow] Soumission du formulaire...")
+            await page.click('[data-label="register-create-account-button"][type="submit"]')
+            await page.wait_for_load_state("networkidle")
+            await asyncio.sleep(5)
+
+            # Gestion de la redirection vers /login si nécessaire
+            if "login.eset.com/login" in page.url:
+                print("[Workflow] Redirection détectée, connexion en cours...")
+                await page.locator('[data-label="browser-email-input-input"]').fill(email)
+                await page.locator('[data-label="browser-password-input-input"]').fill(MOT_DE_PASSE)
+                await page.click('[data-label="browser-log-in-button"]')
+                await page.wait_for_load_state("networkidle")
+
+            # --- ÉTAPE 3 : VÉRIFICATION DU MAIL ---
+            print("[Workflow] 3/4 - Retour sur le mailer pour validation...")
+            await page.goto("https://dahord-08.github.io/DAHORD-Mailer/")
+            await page.wait_for_load_state("networkidle")
+
+            print("[Workflow] Attente de l'indicateur de mail reçu...")
+            indicateur_mail = page.locator('[data-label="mail-indice-for-bot-use"]')
+            # Timeout réduit à 2 minutes max pour éviter que Browserless ne coupe avant
+            await indicateur_mail.wait_for(state="visible", timeout=120000)
+            await indicateur_mail.click()
+            await asyncio.sleep(4)
+
+            print("[Workflow] Recherche du lien de confirmation dans l'iFrame...")
+            lien_clique = False
+            for frame in page.frames:
+                lien = await frame.query_selector('a.clickable-blue-button')
+                if lien:
+                    await lien.click()
+                    print("[Workflow] Lien de vérification cliqué !")
+                    lien_clique = True
+                    break
             
-            # 4. Attente du mail de validation sur le premier onglet
-            print("[Workflow] Inscription soumise. Attente du mail de confirmation...")
-            verification_reussie = await attendre_verification(page_mail)
+            if not lien_clique:
+                raise Exception("Impossible de trouver ou de cliquer sur le lien de validation dans le mail.")
+
+            await asyncio.sleep(5) # Attente de la validation côté serveur
+
+            # --- ÉTAPE 4 : CONNEXION ESET ET RÉCUPÉRATION DE LA CLÉ ---
+            print("[Workflow] 4/4 - Retour sur ESET pour l'onboarding et la clé...")
+            await page.goto("https://login.eset.com/")
+            await page.wait_for_load_state("networkidle")
+
+            # Connexion au compte validé
+            await page.locator('[data-label="browser-email-input-input"]').fill(email)
+            await page.locator('[data-label="browser-password-input-input"]').fill(MOT_DE_PASSE)
+            await page.click('[data-label="browser-log-in-button"]')
+            await page.wait_for_load_state("networkidle")
+
+            # Onboarding
+            bouton_onboarding = page.locator('[data-label="onboarding-welcome-skip-introduction-btn"][type="button"]')
+            await bouton_onboarding.wait_for(state="visible", timeout=30000)
+            await bouton_onboarding.click()
+            await page.wait_for_load_state("networkidle")
+
+            # Sélection Mode Essai
+            await page.locator('[data-label="onboarding-add-subscription-protect-card-trial"]').click()
+            await asyncio.sleep(1)
+            await page.click('button.css-wfkctl[type="button"]')
+            await page.wait_for_load_state("networkidle")
+
+            # Sélection Produit
+            await page.locator('[data-label="onboarding-trial-protect-card-148"]').click()
+            await asyncio.sleep(1)
+            await page.click('button.css-wfkctl[type="button"]')
+            await page.wait_for_load_state("networkidle")
+
+            # Saisie Nom
+            await page.click('button.css-wfkctl[type="button"]')
+            await page.wait_for_load_state("networkidle")
+            await page.locator('input#name').fill(nom)
+            await page.click('[data-label="onboarding-members-continue-btn"]')
+            await asyncio.sleep(1)
+            await page.click('button.css-wfkctl[type="button"]')
+            await page.wait_for_load_state("networkidle")
+
+            # Option "Me" et confirmation
+            await page.locator('[data-label="onboarding-members-me-option"]').click()
+            await asyncio.sleep(1)
+            await page.click('button.css-wfkctl[type="button"]')
+            await page.wait_for_load_state("networkidle")
+
+            await page.locator('button.css-93cvbk[type="button"]').click()
             
-            # Fermeture propre de la session
+            # Récupération Clé
+            await page.locator('[data-label="dashboard-subscriptions-card-button"]').click()
+            await page.wait_for_load_state("networkidle")
+            
+            await page.locator('[data-label="license-list-open-detail-page-btn"]').click()
+            await page.wait_for_load_state("networkidle")
+
+            cle_element = await page.wait_for_selector('[data-label="license-detail-license-key"]', timeout=20000)
+            cle = await cle_element.text_content()
+
             await browser.close()
-            
-            if not verification_reussie:
-                raise Exception("La vérification de l'e-mail a échoué ou a expiré.")
-                
-            return {
-                "status": "success",
-                "email": email,
-                "cle": cle_licence
-            }
+            return {"status": "success", "email": email, "cle": cle.strip()}
             
     except Exception as e:
-        print(f"[ERREUR SCRIPT] -> {str(e)}")
+        print(f"[ERREUR] -> {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
