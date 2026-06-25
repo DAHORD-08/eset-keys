@@ -1,25 +1,11 @@
-import os
+# eset_account.py
 import asyncio
-from playwright.async_api import async_playwright
+from playwright.async_api import Page
 
 MOT_DE_PASSE = "singe@JUNGLE369"
 
-async def creer_compte_eset(playwright, email: str):
+async def creer_compte_eset(page: Page, email: str) -> str:
     nom = email.split("@")[0]
-
-    # Récupération du token
-    token = os.environ.get("BROWSERLESS_TOKEN", "2UlhDbObUX6gvHZc97b815c9c73ee1cb06b7260c79d8557b7")
-    
-    # URL correcte pour le protocole Playwright WS chez Browserless
-    endpoint_url = f"wss://production-sfo.browserless.io/chromium?token={token}"
-    
-    print("[ESET] Connexion au navigateur distant (Playwright WS)...")
-    browser = await playwright.chromium.connect(endpoint_url)
-    
-    context = await browser.new_context()
-    page = await context.new_page()
-    
-    # ... (Conservez votre logique fonctionnelle ici)
 
     print(f"\n[ESET] Ouverture de la page d'inscription pour : {email}")
     await page.goto("https://login.eset.com/register")
@@ -45,7 +31,6 @@ async def creer_compte_eset(playwright, email: str):
     await champ_password.fill(MOT_DE_PASSE)
 
     print("[3/10] Clic sur le bouton de soumission...")
-    # Remplacez le sélecteur ci-dessous par le bon bouton de validation finale
     await page.click('[data-label="register-create-account-button"][type="submit"]')
     await page.wait_for_load_state("networkidle")
 
@@ -150,5 +135,4 @@ async def creer_compte_eset(playwright, email: str):
     )
     cle = await cle_element.text_content()
 
-    await browser.close()
     return cle.strip()

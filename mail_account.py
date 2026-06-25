@@ -1,21 +1,8 @@
-import os
+# mail_account.py
 import asyncio
-from playwright.async_api import async_playwright, Browser, Page
+from playwright.async_api import Page
 
-async def creer_mail(playwright) -> tuple[Browser, Page, str]:
-    # Connexion au navigateur distant (Browserless) pour contourner les limites de Vercel
-    # Récupération du token
-    token = os.environ.get("BROWSERLESS_TOKEN", "2UlhDbObUX6gvHZc97b815c9c73ee1cb06b7260c79d8557b7")
-    
-    # URL correcte pour le protocole Playwright WS chez Browserless
-    endpoint_url = f"wss://production-sfo.browserless.io/chromium?token={token}"
-    
-    print("[Mail] Connexion au navigateur distant (Playwright WS)...")
-    browser = await playwright.chromium.connect(endpoint_url)
-    
-    context = await browser.new_context()
-    page = await context.new_page()
-
+async def creer_mail(page: Page) -> str:
     print("[Mail] Ouverture de la page mail temporaire...")
     await page.goto("https://dahord-08.github.io/DAHORD-Mailer/")
     await page.wait_for_load_state("networkidle")
@@ -26,9 +13,9 @@ async def creer_mail(playwright) -> tuple[Browser, Page, str]:
     mail = await champ_affichage_mail.input_value()
 
     print(f"[Mail] Adresse générée : {mail}")
-    return browser, page, mail
+    return mail
 
-async def attendre_verification(page: Page):
+async def attendre_verification(page: Page) -> bool:
     print("[Mail] En attente de l'email de vérification...")
     try:
         indicateur_mail = page.locator('[data-label="mail-indice-for-bot-use"]')

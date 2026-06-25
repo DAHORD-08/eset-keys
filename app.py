@@ -17,23 +17,30 @@ def home():
 async def generate_key():
     try:
         async with async_playwright() as playwright:
-            # ÉTAPE 1 : On génère d'abord l'e-mail temporaire
-            print("[Workflow] Génération de l'e-mail temporaire...")
-            browser_mail, page_mail, email = await creer_mail(playwright)
+            # 1. Connexion unique à Browserless
+            token = os.environ.get("BROWSERLESS_TOKEN", "2UlhDbObUX6gvHZc97b815c9c73ee1cb06b7260c79d8557b7")
+            endpoint_url = f"wss://production-sfo.browserless.io/chromium?token={token}"
+            
+            print("[Workflow] Connexion unique au navigateur distant...")
+            browser = await playwright.chromium.connect(endpoint_url)
+            context = await browser.new_context()
+
+            # 2. Étape Mail : On ouvre un onglet pour le mailer
+            page_mail = await context.new_page()
+            email = await creer_mail(page_mail)
             print(f"[Workflow] E-mail généré : {email}")
             
-            # ÉTAPE 2 : On lance la création ESET de manière SÉQUENTIELLE (pas de gather)
-            # Cette fonction va remplir les champs, cliquer sur s'inscrire et s'arrêter au moment où elle attend le mail
+            # 3. Étape ESET : On ouvre un deuxième onglet dans le même navigateur
+            page_eset = await context.new_page()
             print("[Workflow] Inscription sur ESET en cours...")
-            cle_licence = await creer_compte_eset(playwright, email)
+            cle_licence = await creer_compte_eset(page_eset, email)
             
-            # ÉTAPE 3 : Maintenant que le formulaire ESET est soumis, l'email a été envoyé.
-            # On peut lancer l'attente de vérification sur notre page de mail
+            # 4. Attente du mail de validation sur le premier onglet
             print("[Workflow] Inscription soumise. Attente du mail de confirmation...")
             verification_reussie = await attendre_verification(page_mail)
             
-            # Fermeture propre du navigateur de mail
-            await browser_mail.close()
+            # Fermeture propre de la session
+            await browser.close()
             
             if not verification_reussie:
                 raise Exception("La vérification de l'e-mail a échoué ou a expiré.")
