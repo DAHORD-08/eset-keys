@@ -10,12 +10,14 @@ async def creer_compte_eset(playwright, email: str):
     # Connexion au navigateur distant (Browserless) pour contourner les limites de Vercel
     # BROWSERLESS_TOKEN sera configuré dans l'interface de Vercel
     token = os.environ.get("BROWSERLESS_TOKEN", "2UlhDbObUX6gvHZc97b815c9c73ee1cb06b7260c79d8557b7")
-    endpoint_url = f"wss://production-sfo.browserless.io/chromium/playwright?token={token}"
     
-    print("[ESET] Connexion au navigateur distant...")
-    browser = await playwright.chromium.connect_over_cdp(endpoint_url)
+    # CHANGEMENT TECHNIQUE : Utilisation du endpoint /playwright natif pour Browserless
+    endpoint_url = f"wss://production-sfo.browserless.io/playwright?token={token}"
     
-    # Le reste de votre code reste identique
+    print("[ESET] Connexion au navigateur distant (Playwright WS)...")
+    # CHANGEMENT TECHNIQUE : .connect() au lieu de .connect_over_cdp()
+    browser = await playwright.chromium.connect(endpoint_url)
+    
     context = await browser.new_context()
     page = await context.new_page()
     
