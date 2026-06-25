@@ -1,5 +1,0 @@
-# ignorer le dossier __pycache__ et le dossier env
-
-__pycache__/
-env/
-eset_account2.py
