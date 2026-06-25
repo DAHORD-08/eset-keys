@@ -4,7 +4,7 @@ import asyncio
 from fastapi import FastAPI, HTTPException
 from playwright.async_api import async_playwright
 
-from mail_account_2 import creer_mail, attendre_verification
+from mail_account import creer_mail, attendre_verification
 from eset_account import creer_compte_eset
 
 app = FastAPI()
