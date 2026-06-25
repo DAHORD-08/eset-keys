@@ -5,12 +5,11 @@ import asyncio
 from fastapi import FastAPI, HTTPException
 from playwright.async_api import async_playwright
 
-# Ajout automatique de la racine du projet pour résoudre les chemins d'importation
+# Configuration indispensable pour que Vercel trouve vos modules complémentaires
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# Importation correcte des modules configurés pour le cloud
 from mail_account import creer_mail, attendre_verification
-from eset_account import creer_compte_eset  # Utilisation de la version eset_account
+from eset_account import creer_compte_eset
 
 app = FastAPI()
 
