@@ -1,25 +1,22 @@
 # api/index.py
 import os
 import sys
+import asyncio
 from fastapi import FastAPI, HTTPException
 from playwright.async_api import async_playwright
-import asyncio
 
-# Ajoute le dossier racine au chemin de recherche Python pour trouver vos scripts
+# Ajout automatique de la racine du projet pour résoudre les chemins d'importation
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# Importations de vos modules modifiés pour le cloud
+# Importation correcte des modules configurés pour le cloud
 from mail_account import creer_mail, attendre_verification
-from eset_account import creer_compte_eset  # Utilise la version cloud eset_account
+from eset_account import creer_compte_eset  # Utilisation de la version eset_account
 
 app = FastAPI()
-
-# (Le reste du code de votre fichier index.py reste identique)
 
 async def generer_cle_workflow(playwright):
     browser_mail, page_mail, email = await creer_mail(playwright)
     
-    # Exécution du flow
     taches = await asyncio.gather(
         creer_compte_eset(playwright, email),
         attendre_verification(page_mail),
